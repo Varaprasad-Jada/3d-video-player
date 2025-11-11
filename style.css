@@ -1,0 +1,48 @@
+/* Custom styles for TV/large screen viewing */
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #1a1a2e; /* Dark, TV-friendly background */
+    color: white;
+    padding: 2rem;
+    min-height: 100vh;
+}
+/* Ensure the canvas is the main focus */
+#outputCanvas {
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+    border: 4px solid #00c49a;
+    border-radius: 1rem;
+    max-width: 90vw; /* Fluid width */
+    max-height: 70vh; /* Max height to ensure controls are visible */
+    margin: 0 auto;
+    display: block;
+    cursor: pointer; /* Indicate interactivity */
+}
+/* Style for interactive elements (focus is key for TV remote) */
+button, input[type="file"]::file-selector-button {
+    transition: all 0.2s;
+    transform: scale(1.0);
+    /* These styles primarily affect the filter and file input buttons */
+    min-height: 3rem;
+    min-width: 6rem; 
+    padding: 0.75rem 1.5rem;
+}
+button:focus, button:hover,
+input[type="file"]:focus, input[type="file"]:hover {
+    transform: scale(1.05); /* Enlarge on hover/focus for TV experience */
+    box-shadow: 0 0 15px rgba(0, 196, 154, 0.8);
+    outline: none;
+}
+/* Full screen specific style */
+.fullscreen-active {
+    /* This simulates fullscreen by maximizing within the available container/iframe */
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: 100vw !important;
+    max-height: 100vh !important;
+    border-radius: 0;
+    margin: 0;
+    position: fixed; /* Ensures it overlays content */
+    top: 0;
+    left: 0;
+    z-index: 100; /* Ensure it's on top */
+}

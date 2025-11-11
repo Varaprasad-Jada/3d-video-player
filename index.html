@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SBS to Anaglyph 3D Converter (Offline Player)</title>
+    
+    <style>
+        /* --- OFFLINE CSS STYLES --- */
+        :root {
+            --primary-color: #00c49a;
+            --secondary-color: #63b3ed;
+            --background-color: #1a1a2e;
+            --card-color: #2e2e4e;
+            --text-color: white;
+            --shadow-color: rgba(0, 196, 154, 0.8);
+            --danger-color: #ff6347;
+            --timeline-bg: #444;
+            --timeline-fill: var(--primary-color);
+            --overlay-bg: rgba(46, 46, 78, 0.9); /* Opaque Card color */
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            padding: 2rem 1rem;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 1000px;
+            width: 100%;
+            margin-top: 1rem;
+            gap: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .card {
+            background-color: var(--card-color);
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            width: 100%;
+        }
+        
+        /* Player Container and Canvas */
+        #canvasWrapper {
+            position: relative;
+            width: 100%;
+            max-width: 1000px; /* Max size for player */
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            border-radius: 1rem;
+            overflow: hidden;
+            background-color: black;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #outputCanvas {
+            display: block;
+            cursor: pointer;
+            width: 100%;
+            height: auto;
+            border: 4px solid transparent;
+            transition: all 0.3s ease;
+        }
+        /* Window Fit Mode (Default) */
+        .window-fit {
+            max-width: 100%;
+            max-height: 80vh; 
+            width: auto;
+            height: auto;
+        }
+
+        /* --- Floating Controls (Always at the bottom) --- */
+        #floatingControls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            flex-direction: column;
+            padding: 0.5rem 1rem;
+            background-image: linear-gradient(to top, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0));
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+            z-index: 20;
+        }
+        #canvasWrapper:hover #floatingControls, 
+        #floatingControls:hover {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #playbackButtons {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+        .control-btn {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            border-radius: 0.5rem;
+            width: 2.5rem;
+            height: 2.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background-color 0.1s;
+            border: none;
+            cursor: pointer;
+        }
+        .control-btn:hover {
+            background-color: rgba(255, 255, 255, 0.4);
+        }
+        .control-btn.lg {
+            width: auto;
+            padding: 0 1rem;
+        }
+
+        /* Timeline/Progress Bar Styling */
+        #progressBarContainer {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.25rem 0;
+        }
+        #progressBar {
+            flex-grow: 1;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            background: var(--timeline-bg);
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        #progressBar::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--timeline-fill);
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 0 5px var(--shadow-color);
+        }
+        .time-display {
+            font-size: 0.8rem;
+            min-width: 3rem;
+            text-align: center;
+            color: white;
+        }
+
+        /* --- Settings Overlay (Foldable) --- */
+        #settingsPanel {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-width: 450px;
+            background-color: var(--overlay-bg);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+            z-index: 30;
+            display: none; /* Initially hidden */
+            border: 2px solid var(--secondary-color);
+        }
+        .settings-header {
+            font-size: 1.125rem;
+            font-weight: 700;
+            color: var(--secondary-color);
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 0.25rem;
+        }
+
+        /* Toggle Button for Settings Panel */
+        #settingsToggle {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background-color: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 25;
+            opacity: 0.5;
+            transition: opacity 0.2s, transform 0.2s;
+        }
+        #settingsToggle:hover {
+            opacity: 1;
+            transform: rotate(90deg);
+        }
+        
+        /* Minimize Button (inside panel) */
+        #minimizeSettings {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: transparent;
+            color: white;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0.25rem;
+            transition: color 0.2s;
+        }
+        #minimizeSettings:hover {
+            color: var(--danger-color);
+        }
+
+        /* Mode & Scale Button Styling */
+        .control-group {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+        .btn-setting {
+            padding: 0.5rem 0.75rem;
+            border-radius: 0.5rem; 
+            font-weight: 500;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+            background-color: #555;
+            color: white;
+        }
+        .btn-setting.active {
+            border-color: var(--primary-color) !important;
+            box-shadow: 0 0 8px var(--shadow-color);
+            background-color: var(--primary-color);
+            color: #1a1a2e;
+        }
+
+        /* Fullscreen Simulation (for window stretch) */
+        .fullscreen-stretch {
+            width: 100vw !important;
+            height: 100vh !important;
+            max-width: 100vw !important;
+            max-height: 100vh !important;
+            border-radius: 0 !important;
+            margin: 0 !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            z-index: 100;
+        }
+        .fullscreen-stretch #settingsToggle {
+             z-index: 105; /* Keep setting button above canvas */
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Header -->
+    <header style="text-align: center; margin-bottom: 1rem;">
+        <h1 style="font-size: 2.5rem; font-weight: 800; color: var(--primary-color);">3D Anaglyph Player (Offline)</h1>
+        <p style="font-size: 0.875rem; color: var(--danger-color); font-weight: bold; margin-top: 0.5rem;">
+            * IMPORTANT: Requires a local server (`http://`) to bypass browser security for video processing.
+        </p>
+    </header>
+
+    <!-- Controls: File Input -->
+    <div class="card" style="border-top: 4px solid var(--primary-color); margin-bottom: 0;">
+        <label for="videoFile" style="display: block; font-size: 1.25rem; font-weight: 500; color: white; margin-bottom: 1rem;">
+            1. Select SBS Video File (MP4, WebM)
+        </label>
+        <input type="file" id="videoFile" accept="video/mp4,video/ogg,video/webm" style="display: block; width: 100%;"/>
+        
+        <p id="status" style="text-align: center; color: #aaa; margin-top: 1rem; min-height: 1rem;"></p>
+    </div>
+
+    <!-- Video Output Area / Player -->
+    <div id="canvasWrapper" style="margin-top: 2rem;">
+        <!-- The canvas is where the final Anaglyph 3D video is drawn -->
+        <canvas id="outputCanvas" width="1280" height="720" class="window-fit"></canvas>
+
+        <!-- Settings Panel Toggle Button -->
+        <button id="settingsToggle" title="Open Settings">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.44a2 2 0 0 1-1.22 1.83l-.43.25a2 2 0 0 0-1.83 1.22l-.44 1.22a2 2 0 0 0-.89 1.55v.44a2 2 0 0 0 2 2h.44a2 2 0 0 1 1.22 1.83l.25.43a2 2 0 0 0 1.22 1.83l1.22.44a2 2 0 0 0 1.55.89h.44a2 2 0 0 0 2-2v-.44a2 2 0 0 1 1.22-1.83l.43-.25a2 2 0 0 0 1.83-1.22l.44-1.22a2 2 0 0 0 .89-1.55v-.44a2 2 0 0 0-2-2h-.44a2 2 0 0 1-1.22-1.83l-.25-.43a2 2 0 0 0-1.22-1.83l-1.22-.44a2 2 0 0 0-1.55-.89z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+
+        <!-- Detailed Settings Panel (Foldable) -->
+        <div id="settingsPanel">
+            <button id="minimizeSettings" title="Minimize Settings">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"/><path d="M6 6L18 18"/></svg>
+            </button>
+            <h3 style="font-size: 1.5rem; color: white; text-align: center; margin-bottom: 1rem;">Video Settings</h3>
+            
+            <!-- Anaglyph Filter Selection -->
+            <h4 class="settings-header">Anaglyph Filter Mode</h4>
+            <div id="anaglyphControls" class="control-group">
+                <button data-mode="red_cyan" class="btn-setting active" style="background-color: #991b1b;">
+                    Red / Cyan
+                </button>
+                <button data-mode="green_magenta" class="btn-setting" style="background-color: #065f46;">
+                    Green / Magenta
+                </button>
+                <button data-mode="blue_yellow" class="btn-setting" style="background-color: #1e40af;">
+                    Blue / Yellow
+                </button>
+            </div>
+
+            <!-- Scaling Controls -->
+            <h4 class="settings-header">Video Scaling Mode</h4>
+            <div id="scalingControls" class="control-group">
+                <button data-scale="fit_window" class="btn-setting active">Window Fit</button>
+                <button data-scale="stretch_window" class="btn-setting">Window Stretch</button>
+                <button data-scale="1x" class="btn-setting">1X Pixels</button>
+                <button data-scale="2x" class="btn-setting">2X Pixels</button>
+            </div>
+        </div>
+
+
+        <!-- Primary Floating Controls (Playback & Timeline) -->
+        <div id="floatingControls">
+            <!-- Timeline/Progress Bar -->
+            <div id="progressBarContainer">
+                <span id="currentTimeDisplay" class="time-display">00:00</span>
+                <input type="range" id="progressBar" min="0" max="1000" value="0">
+                <span id="durationDisplay" class="time-display">--:--</span>
+            </div>
+            
+            <!-- Playback Buttons -->
+            <div id="playbackButtons">
+                <button id="skipBackward" class="control-btn" title="Skip Backward 10s">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h6"/><path d="M3 12a9 9 0 0 1 15-6l-3 3"/></svg>
+                </button>
+                <button id="playPause" class="control-btn lg">
+                    <span id="playPauseIcon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="playIcon"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" id="pauseIcon" style="display: none;"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                    </span>
+                    <span id="playPauseText" style="margin-left: 0.5rem;">Play</span>
+                </button>
+                <button id="skipForward" class="control-btn" title="Skip Forward 10s">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 2v6h6"/><path d="M21 12a9 9 0 0 1-18 6l3-3"/></svg>
+                </button>
+                <button id="fullscreenToggle" class="control-btn" title="Toggle Native Fullscreen">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Hidden Video Element for Loading and Reading Frames -->
+    <video id="sourceVideo" style="display: none;" preload="auto"></video>
+
+</div>
+
+<script>
+    // --- OFFLINE JAVASCRIPT LOGIC ---
+    
+    // Constants
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+    // --- DOM Elements ---
+    const videoInput = document.getElementById('videoFile');
+    const sourceVideo = document.getElementById('sourceVideo');
+    const outputCanvas = document.getElementById('outputCanvas');
+    const statusText = document.getElementById('status');
+    const playPauseButton = document.getElementById('playPause');
+    const playIcon = document.getElementById('playIcon');
+    const pauseIcon = document.getElementById('pauseIcon');
+    const playPauseText = document.getElementById('playPauseText');
+    const skipForwardButton = document.getElementById('skipForward');
+    const skipBackwardButton = document.getElementById('skipBackward');
+    const fullscreenToggle = document.getElementById('fullscreenToggle');
+    const settingsToggle = document.getElementById('settingsToggle');
+    const minimizeSettings = document.getElementById('minimizeSettings');
+    const settingsPanel = document.getElementById('settingsPanel');
+    const anaglyphModeButtons = document.querySelectorAll('#anaglyphControls .btn-setting');
+    const scalingButtons = document.querySelectorAll('#scalingControls .btn-setting');
+    const progressBar = document.getElementById('progressBar');
+    const currentTimeDisplay = document.getElementById('currentTimeDisplay');
+    const durationDisplay = document.getElementById('durationDisplay');
+    const ctx = outputCanvas.getContext('2d');
+
+    // --- State Variables ---
+    let animationFrameId = null;
+    let isVideoPlaying = false;
+    let anaglyphMode = 'red_cyan';
+    let currentScaleMode = 'fit_window'; 
+    let initialCanvasWidth = 0; // The actual pixel width of the generated 3D content
+    let initialCanvasHeight = 0;
+    let isSettingsOpen = false;
+
+    // Anaglyph Matrix/Logic Map
+    const ANAGLYPH_MODES = {
+        'red_cyan': { left: [1, 0, 0], right: [0, 1, 1] }, 
+        'green_magenta': { left: [0, 1, 0], right: [1, 0, 1] },
+        'blue_yellow': { left: [0, 0, 1], right: [1, 1, 0] },
+    };
+
+    /** Utility function to format seconds into MM:SS string. */
+    function formatTime(seconds) {
+        if (isNaN(seconds) || seconds < 0) return '--:--';
+        const minutes = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    /** Calculates the grayscale value using standard luminosity weights. */
+    function getGrayscale(r, g, b) {
+        return (r * 0.3) + (g * 0.59) + (b * 0.11);
+    }
+
+    /** Applies the selected scaling mode to the canvas CSS style. */
+    function applyScaling(mode) {
+        currentScaleMode = mode;
+        
+        outputCanvas.classList.remove('fullscreen-stretch', 'window-fit');
+        outputCanvas.style.width = '100%'; // Reset for auto-sizing
+        outputCanvas.style.height = 'auto';
+
+        // Update active button state
+        scalingButtons.forEach(btn => btn.classList.remove('active'));
+        document.querySelector(`#scalingControls [data-scale="${mode}"]`).classList.add('active');
+
+        // Apply new style
+        switch (mode) {
+            case '1x':
+                outputCanvas.style.width = initialCanvasWidth + 'px';
+                outputCanvas.style.height = initialCanvasHeight + 'px';
+                // Remove window-fit to let the canvas size itself literally
+                break;
+            case '2x':
+                outputCanvas.style.width = (initialCanvasWidth * 2) + 'px';
+                outputCanvas.style.height = (initialCanvasHeight * 2) + 'px';
+                // Remove window-fit to let the canvas size itself literally
+                break;
+            case 'stretch_window':
+                outputCanvas.classList.add('fullscreen-stretch');
+                break;
+            case 'fit_window':
+            default:
+                outputCanvas.classList.add('window-fit');
+                break;
+        }
+        statusText.textContent = `Scaling mode set to ${mode.replace('_', ' ').toUpperCase()}.`;
+    }
+
+    /** Toggles play/pause state. */
+    function togglePlayback() {
+        if (!sourceVideo.src) {
+            statusText.textContent = "Please select a video file first.";
+            return;
+        }
+
+        if (sourceVideo.paused || sourceVideo.ended) {
+            attemptPlayback();
+        } else {
+            sourceVideo.pause();
+            isVideoPlaying = false;
+            updatePlayPauseButton(false);
+            statusText.textContent = "Video paused.";
+        }
+    }
+
+    /** Attempts to start video playback and handle autoplay restrictions. */
+    function attemptPlayback() {
+         sourceVideo.play().then(() => {
+            isVideoPlaying = true;
+            updatePlayPauseButton(true);
+            statusText.textContent = "Video playing (Anaglyph 3D).";
+            if (!animationFrameId) {
+                animationFrameId = requestAnimationFrame(processFrame);
+            }
+        }).catch(e => {
+            isVideoPlaying = false;
+            updatePlayPauseButton(false);
+            statusText.textContent = "Autoplay blocked. Click Play or the canvas to start.";
+        });
+    }
+
+    /** Updates the Play/Pause button UI using inline SVG visibility. */
+    function updatePlayPauseButton(isPlaying) {
+        playIcon.style.display = isPlaying ? 'none' : 'block';
+        pauseIcon.style.display = isPlaying ? 'block' : 'none';
+        playPauseText.textContent = isPlaying ? 'Pause' : 'Play';
+    }
+
+    /** Skips the video forward or backward by a given number of seconds. */
+    function skipVideo(seconds) {
+        if (sourceVideo.src) {
+            sourceVideo.currentTime = Math.max(0, sourceVideo.currentTime + seconds);
+        }
+    }
+    
+    /** Toggles the visibility of the detailed settings panel. */
+    function toggleSettingsPanel(open) {
+        isSettingsOpen = open !== undefined ? open : !isSettingsOpen;
+        settingsPanel.style.display = isSettingsOpen ? 'block' : 'none';
+        settingsToggle.style.opacity = isSettingsOpen ? '1' : '0.5';
+        settingsToggle.style.pointerEvents = isSettingsOpen ? 'none' : 'auto';
+        if (isSettingsOpen) {
+            statusText.textContent = "Settings opened.";
+        }
+    }
+
+
+    // --- Event Listeners Setup ---
+
+    videoInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        statusText.textContent = "Loading video...";
+        const videoURL = URL.createObjectURL(file);
+
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+        }
+
+        sourceVideo.src = videoURL;
+        sourceVideo.load();
+
+        sourceVideo.onloadedmetadata = () => {
+            // Set canvas drawing resolution (internal)
+            outputCanvas.width = sourceVideo.videoWidth / 2;
+            outputCanvas.height = sourceVideo.videoHeight;
+            initialCanvasWidth = outputCanvas.width;
+            initialCanvasHeight = outputCanvas.height;
+
+            durationDisplay.textContent = formatTime(sourceVideo.duration);
+            // Max value set high for smooth scrubbing
+            progressBar.max = Math.floor(sourceVideo.duration * 1000); 
+
+            applyScaling(currentScaleMode);
+            statusText.textContent = "Video loaded. Click Play to start.";
+        };
+
+        sourceVideo.oncanplay = () => {
+            attemptPlayback();
+        };
+        
+        sourceVideo.onerror = (e) => {
+            // Error handling for 'Tainted Canvas' or unsupported codecs
+            const error = sourceVideo.error;
+            let message = "Video playback failed.";
+            if (error && error.code === error.MEDIA_ERR_SRC_NOT_SUPPORTED) {
+                message = "File access blocked! This requires a local server (`http://`) to process video.";
+            } else if (error) {
+                message = `Media error ${error.code}: File corrupt or unsupported codec.`;
+            }
+            statusText.textContent = `ERROR: ${message}`;
+            console.error("Video Error:", error);
+            isVideoPlaying = false;
+            updatePlayPauseButton(false);
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+        };
+    });
+
+    // Playback Controls
+    playPauseButton.addEventListener('click', togglePlayback);
+    outputCanvas.addEventListener('click', togglePlayback);
+    skipForwardButton.addEventListener('click', () => skipVideo(10));
+    skipBackwardButton.addEventListener('click', () => skipVideo(-10));
+    fullscreenToggle.addEventListener('click', () => {
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+        } else {
+            document.getElementById('canvasWrapper').requestFullscreen().catch(err => {
+                console.warn(`Native fullscreen failed: ${err.message}. Switching to Window Stretch.`);
+                applyScaling('stretch_window'); 
+            });
+        }
+    });
+
+    // Settings Panel Controls
+    settingsToggle.addEventListener('click', () => toggleSettingsPanel(true));
+    minimizeSettings.addEventListener('click', () => toggleSettingsPanel(false));
+    
+    // Anaglyph Mode Selection
+    anaglyphModeButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            anaglyphMode = button.getAttribute('data-mode');
+            anaglyphModeButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            statusText.textContent = `Filter changed to ${anaglyphMode.replace('_', ' ')}.`;
+        });
+    });
+
+    // Scaling Mode Selection
+    scalingButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const mode = button.getAttribute('data-scale');
+            applyScaling(mode);
+        });
+    });
+
+    // Timeline/Progress Bar Logic
+    sourceVideo.addEventListener('timeupdate', () => {
+        if (!sourceVideo.duration) return;
+        const progress = (sourceVideo.currentTime / sourceVideo.duration) * progressBar.max;
+        progressBar.value = progress;
+        currentTimeDisplay.textContent = formatTime(sourceVideo.currentTime);
+
+        if (sourceVideo.ended) {
+            isVideoPlaying = false;
+            updatePlayPauseButton(false);
+            statusText.textContent = "Video ended. Click Play to restart.";
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+        }
+    });
+
+    // Seek when the user interacts with the progress bar
+    progressBar.addEventListener('input', () => {
+        if (!sourceVideo.duration) return;
+        const seekTime = (progressBar.value / progressBar.max) * sourceVideo.duration;
+        sourceVideo.currentTime = seekTime;
+        currentTimeDisplay.textContent = formatTime(seekTime);
+    });
+
+    // Event listener for exiting native fullscreen (resets to Fit Window mode)
+    document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement) {
+            // When exiting native fullscreen, re-apply the last selected or default scaling mode
+            applyScaling(currentScaleMode); 
+        }
+    });
+
+
+    // --- Core Video Processing Loop ---
+    function processFrame() {
+        if (sourceVideo.paused || sourceVideo.ended || sourceVideo.readyState < 2) {
+            animationFrameId = null;
+            return;
+        }
+
+        const width = outputCanvas.width;
+        const height = outputCanvas.height;
+        const sourceWidth = sourceVideo.videoWidth;
+        const mode = ANAGLYPH_MODES[anaglyphMode];
+
+        if (!mode || width === 0 || height === 0) {
+            animationFrameId = requestAnimationFrame(processFrame);
+            return;
+        }
+
+        try {
+            // 1. Draw Left Eye to canvas
+            ctx.drawImage(sourceVideo, 0, 0, sourceWidth / 2, height, 0, 0, width, height);
+            const leftData = ctx.getImageData(0, 0, width, height);
+            const leftPixels = leftData.data;
+
+            // 2. Draw Right Eye to canvas (overwriting the data)
+            ctx.drawImage(sourceVideo, sourceWidth / 2, 0, sourceWidth / 2, height, 0, 0, width, height);
+            const rightData = ctx.getImageData(0, 0, width, height);
+            const rightPixels = rightData.data;
+
+            // 3. Anaglyph Conversion Loop (Applied to the 'left' buffer, which is drawn)
+            for (let i = 0; i < leftPixels.length; i += 4) {
+                const R_L = leftPixels[i];
+                const G_L = leftPixels[i + 1];
+                const B_L = leftPixels[i + 2];
+                
+                const R_R = rightPixels[i];
+                const G_R = rightPixels[i + 1];
+                const B_R = rightPixels[i + 2];
+                
+                // Grayscale calculation for the receiving eye's color channels
+                const L_Gray = getGrayscale(R_L, G_L, B_L); // Currently unused in basic anaglyph
+                const R_Gray = getGrayscale(R_R, G_R, B_R);
+                
+                // Anaglyph Logic: Combine Left's pure channel with Right's grayscale
+                
+                // Red Output Channel
+                const R_out = (mode.left[0] * R_L) + (mode.right[0] * R_Gray);
+
+                // Green Output Channel
+                const G_out = (mode.left[1] * G_L) + (mode.right[1] * R_Gray);
+
+                // Blue Output Channel
+                const B_out = (mode.left[2] * B_L) + (mode.right[2] * R_Gray);
+
+                // Set final pixel values
+                leftPixels[i] = R_out;
+                leftPixels[i + 1] = G_out;
+                leftPixels[i + 2] = B_out;
+            }
+
+            // 4. Put the processed pixel data back onto the canvas
+            ctx.putImageData(leftData, 0, 0);
+
+        } catch(e) {
+            // Crucial: Catches the 'Tainted Canvas' error
+            console.error("Canvas Security Error (Tainted Canvas). You must run this using a local server (http://) to process video frames.", e);
+            statusText.textContent = `FATAL ERROR: Processing blocked (Tainted Canvas). Please use a local server to run this file.`;
+            isVideoPlaying = false;
+            updatePlayPauseButton(false);
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+            return;
+        }
+        
+        // Loop again for the next frame
+        animationFrameId = requestAnimationFrame(processFrame);
+    }
+
+    // Initial setup on load
+    window.onload = function () {
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
+        
+        statusText.textContent = "Ready. Please select a video file.";
+        updatePlayPauseButton(false);
+        // Ensure default scaling mode is visually active
+        applyScaling(currentScaleMode); 
+        toggleSettingsPanel(false); // Ensure settings panel is closed initially
+    }
+</script>
+
+</body>
+</html>
